@@ -1,23 +1,31 @@
 var running_since;
 
 var f = "";
-var fileInput;
 
 var range;
 
 var worker;
 
 function init() {
-    (worker = new Worker('ripser-worker.js')).addEventListener('message', handleMessage, false);
+    (worker = new Worker("ripser-worker.js")).addEventListener("message", handleMessage, false);
 
-    fileInput = document.getElementById('fileInput');
+    fileInput.addEventListener("change", read_and_compute);
+    
+	dim.addEventListener("change", compute);
+	dim_min.addEventListener("change", compute);
+    threshold.addEventListener("change", compute);
+    
+    format.addEventListener("change", function(e) {fileInput.value = null; read_and_compute()});
+	
+	(function(i,s,o,g,r,a,m){
+	 i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+	
+	ga('create', 'UA-83191949-1', 'auto');
+	ga('send', 'pageview');
 
-    fileInput.addEventListener('change', read_and_compute);
-    
-    document.getElementById('dim').addEventListener('change', compute);
-    document.getElementById('threshold').addEventListener('change', compute);
-    
-    document.getElementById('format').addEventListener('change', function(e) {fileInput.value = null; read_and_compute()});
 }
 
 function moduleDidLoad() {
@@ -28,13 +36,13 @@ function moduleDidLoad() {
 function handleCrash(event) {
     fileInput.value = null;
     common.removeModule();
-    document.dispatchEvent(new Event('DOMContentLoaded'));
+    document.dispatchEvent(new Event("DOMContentLoaded"));
 }
 
 function read_and_compute() {
-    document.getElementById('log').textContent = "";
-    document.getElementById('time').innerHTML = "";
-	document.getElementById('barcodes').innerHTML = "";
+    log.textContent = "";
+    time.innerHTML = "";
+	barcodes.innerHTML = "";
 	
 	f = "";
 	
@@ -58,20 +66,22 @@ function parseFloatWithDefault(s, d) {
 
 function compute() {
     
-	document.getElementById('log').textContent = "";
-	document.getElementById('time').innerHTML = "";
-	document.getElementById('barcodes').innerHTML = "";
+	log.textContent = "";
+	time.innerHTML = "";
+	barcodes.innerHTML = "";
 	
 	if (f == "") return;
 	
 	if (running_since != undefined) {
 		worker.terminate();
-		(worker = new Worker('ripser-worker.js')).addEventListener('message', handleMessage, false);
+		(worker = new Worker("ripser-worker.js")).addEventListener("message", handleMessage, false);
 	}
 	
     running_since = (new Date()).getTime();
+	
+	dim_min = parseInt(document.getElementById("dim_min").value);
     
-    worker.postMessage({ 'file': f, 'dim': parseInt(dim.value), 'threshold': parseFloatWithDefault(threshold.value, Infinity), 'format': parseInt(format.value) });
+    worker.postMessage({ "file": f, "dim": parseInt(dim.value), "threshold": parseFloatWithDefault(threshold.value, Infinity), "format": parseInt(format.value) });
     
 }
 
@@ -80,32 +90,32 @@ function chop(x) {
 }
 
 function handleMessage(message) {
-    document.getElementById("time").innerHTML = "Elapsed time: " + ((new Date()).getTime() - running_since)/1000.0 + " seconds" + ((message.data == undefined) ? "" : "&hellip;");
+    time.innerHTML = "Elapsed time: " + ((new Date()).getTime() - running_since)/1000.0 + " seconds" + ((message.data == undefined) ? "" : "&hellip;");
     if (message.data == undefined) {
         running_since = undefined;
 	} else if (message.data.type == "dim") {
-		document.getElementById('log').innerHTML += "persistence intervals in dim " + message.data.dim + ":\n";
-		//document.getElementById('barcodes').innerHTML += "<p>persistence intervals in dim " + message.data.dim + ":</p>";
-		if (message.data.dim > 0)
+		log.innerHTML += "persistence intervals in dim " + message.data.dim + ":\n";
+		//document.getElementById("barcodes").innerHTML += "<p>persistence intervals in dim " + message.data.dim + ":</p>";
+		if (message.data.dim >= (dim_min || 0))
 		{
 			d3.select("#barcodes").append("p").text("Persistence intervals in dimension " + message.data.dim + ":\n");
 			initBarcode(range, message.data.dim);
 		}
 	} else if (message.data.type == "interval") {
-		if (message.data.dim > 0)
+		if (message.data.dim >= (dim_min || 0))
 		{
-			insertBar(message.data.birth, (message.data.death ? message.data.death : range[1] + 0.01*(range[1] - range[0])));
+			insertBar(message.data.birth, (message.data.death ? message.data.death : range[1]));
 		}
-		document.getElementById('log').innerHTML += " [" + chop(message.data.birth) + "," +
+		log.innerHTML += " [" + chop(message.data.birth) + "," +
 		(message.data.death ? chop(message.data.death) + ")\n" : (isNaN(parseFloat(threshold.value))? "&infin;)\n" : parseFloat(threshold.value) + "]\n"));
 	} else if (message.data.type == "point-cloud") {
-		document.getElementById('log').innerHTML += "point cloud with " + message.data.number + " points in dimension " + message.data.dim + "\n";
+		log.innerHTML += "point cloud with " + message.data.size + " points in dimension " + message.data.dim + "\n";
 	} else if (message.data.type == "distance-matrix") {
-		document.getElementById('log').innerHTML += "distance matrix with " + message.data.number + " points\n" +
-		"value range: [" + chop(message.data.min) + ',' + chop(message.data.max) + "]\n";
+		log.innerHTML += "distance matrix with " + message.data.size + " points\n" +
+		"value range: [" + chop(message.data.min) + "," + chop(message.data.max) + "]\n";
 		range = [0, Math.min(message.data.max,parseFloat(threshold.value)||Infinity)];
 	} else if (typeof message.data == "string") {
-		document.getElementById('log').innerHTML += message.data;
+		log.innerHTML += message.data;
     }
 }
 
@@ -124,7 +134,7 @@ function barcodeHeight() {
 	return 8 * data.length;
 }
 
-function initBarcode(valueRange, dim) {
+function initBarcode(valueRange, colorIndex) {
 	
 	index = [],data = [];
 	//console.log(data);
@@ -151,7 +161,7 @@ function initBarcode(valueRange, dim) {
 	
 	g = svg.append("g")
 	.attr("transform", "translate(" + margin.left + "," + margin.top + ")")
-	.attr("fill", d3.schemeCategory10[dim - 1]);
+	.attr("fill", d3.schemeCategory10[(10 + colorIndex) % 10]);
 	
 }
 
@@ -164,20 +174,21 @@ function insertBar(birth, death) {
 	height = barcodeHeight();
 	y.domain(index).range([0, height]);
 		
-	svg.transition().attr("height", height + margin.top + margin.bottom);
+	svg.transition().delay(50)
+	.attr("height", height + margin.top + margin.bottom);
 
 	g.selectAll(".bar").data(data)
 	.enter()
 	.append("g")
 	.attr("class", "bar")
-	.attr("transform", function(d, i) { return "translate(0," + y(i)  + ")"; })
+	.attr("transform", function(d, i) { return "translate(0," + y(i) + ")"; })
 	.append("rect")
 	.attr("height", y.bandwidth())
 	.attr("width", function(d) { return x(d.death) - x(d.birth); })
 	.attr("x", function(d) { return x(d.birth); });
 
-	g.selectAll(".bar").data(data)
-	.transition()
+	g.selectAll(".bar")//.data(data)
+	.transition().delay(50)
 	.attr("transform", function(d, i) { return "translate(0," + y(i) + ")"; });
 
 }
