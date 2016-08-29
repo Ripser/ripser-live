@@ -1,0 +1,4 @@
+[submodule "ripser"]
+	path = ripser
+	url = https://ubauer@github.com/Ripser/ripser.git
+	branch = live
