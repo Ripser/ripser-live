@@ -37,6 +37,7 @@ function moduleDidLoad() {
 
 function handleCrash(event) {
     fileInput.value = null;
+    running_since = undefined;
     common.removeModule();
     document.dispatchEvent(new Event("DOMContentLoaded"));
 }
@@ -58,7 +59,7 @@ function read_and_compute() {
 		
 		if (f != "") compute();
     }
-    reader.readAsText(file);
+    reader.readAsBinaryString(file);
 }
 
 function parseFloatWithDefault(s, d) {
@@ -88,7 +89,7 @@ function compute() {
 }
 
 function chop(x) {
-	return typeof x == "number" ? x.toPrecision(3) / 1 : x;
+	return typeof x == "number" ? x.toPrecision(6) / 1 : x;
 }
 
 function handleMessage(message) {
@@ -187,7 +188,8 @@ function insertBar(birth, death) {
 	.append("rect")
 	.attr("height", y.bandwidth())
 	.attr("width", function(d) { return x(d.death) - x(d.birth); })
-	.attr("x", function(d) { return x(d.birth); });
+	.attr("x", function(d) { return x(d.birth); })
+    .append("title").text(function(d) { return "[" + chop(x(d.birth)).toString() + ", " + chop(x(d.death)).toString() + ")"; } );
 
 	g.selectAll(".bar")//.data(data)
 	.transition().delay(50)
