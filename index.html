@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8"/>
 		<title>Ripser</title>
-		<script type="text/javascript" src="common.js"></script>
+		<script type="text/javascript" src="ripser.js"></script>
 		<script type="text/javascript" src="ripser-web.js"></script>
 		<script src="https://d3js.org/d3.v4.min.js"></script>
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/fingerprintjs2/1.8.0/fingerprint2.min.js"></script>
@@ -40,7 +40,7 @@
 		}
 		</style>
 	</head>
-	<body data-name="ripser" data-tools="pnacl glibc clang-newlib mac" data-configs="Debug Release" data-path="{tc}/{config}">
+	<body>
 		<h1>Ripser</h1>
 <!--        <h2>Status: <code id="statusField">NO-STATUS</code></h2>-->
 		<p>Load a <select id="format" size="1" style="width: automatic">
@@ -60,16 +60,6 @@
 		<pre id="log" style="font-weight:bold; display:none;"></pre>
 		
 		<p id="time">(Click <a href="https://live.ripser.org/?url=https://live.ripser.org/ripser/examples/sphere_3_192.lower_distance_matrix&dim=2">here</a> for an example)</p>
-		
-		
-		<!-- The NaCl plugin will be embedded inside the element with id "listener".
-		 See common.js.-->
-		<div id="listener"></div>
-		
-		<script>
-			document.addEventListener("DOMContentLoaded", init, false);
-		</script>
-
-		
+			
 	</body>
 </html>

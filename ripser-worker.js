@@ -1,4 +1,4 @@
-importScripts('emscripten/ripser.js');
+importScripts('ripser.js');
 
 addEventListener('message', function(e) {
     var data = e.data;

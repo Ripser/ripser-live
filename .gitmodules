@@ -2,3 +2,6 @@
 	path = ripser
 	url = https://ubauer@github.com/Ripser/ripser.git
 	branch = live
+[submodule "emsdk"]
+	path = emsdk
+	url = https://github.com/emscripten-core/emsdk.git
