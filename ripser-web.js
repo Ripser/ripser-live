@@ -6,17 +6,13 @@ var range;
 
 var worker;
 
+var worker_ready = false;
+
 var dimMin;
 
-Module.onRuntimeInitialized = _ => {
-	console.log("Module.onRuntimeInitialized") ;
-	
-    (worker = new Worker("ripser-worker.js")).addEventListener("message", handleMessage, false);
-    
-    if (f != "") compute();
-}
-
 function init() {
+
+    (worker = new Worker("ripser-worker.js")).addEventListener("message", handleMessage, false);
     fileInput.addEventListener("change", read_and_compute);
     
 	dim.addEventListener("change", compute);
@@ -48,14 +44,6 @@ function init() {
 		}
 	}
 	
-	if (searchVars.url) {
-		var client = new HttpClient();
-		client.get(searchVars.url, function(data) {
-			  f = data;
-			  if (f != "") compute();
-			  });
-	}
-	
 	if (searchVars.dim) {
 		dim.value = searchVars.dim;
 	}
@@ -78,13 +66,15 @@ function init() {
 			"dipha" : 4,
 		}[searchVars.format];
 	}
-}
-
-function handleCrash(event) {
-    fileInput.value = null;
-    running_since = undefined;
-    common.removeModule();
-    document.dispatchEvent(new Event("DOMContentLoaded"));
+	
+	if (searchVars.url) {
+		var client = new HttpClient();
+		client.get(searchVars.url, function(data) {
+			  f = data;
+			  compute();
+			  });
+	}
+	
 }
 
 function read_and_compute() {
@@ -102,7 +92,7 @@ function read_and_compute() {
     reader.onload = function(e) {
         f = reader.result;
 		
-		if (f != "") compute();
+		compute();
     }
     reader.readAsBinaryString(file);
 }
@@ -114,11 +104,15 @@ function parseFloatWithDefault(s, d) {
 
 function compute() {
     
+	if (f == "") return;
+	
+	if (worker == undefined) return;
+	
+	if (!worker_ready) return;
+	
 	log.textContent = "";
 	time.innerHTML = "";
 	barcodes.innerHTML = "";
-	
-	if (f == "") return;
 	
 	
 	if (running_since != undefined) {
@@ -130,8 +124,7 @@ function compute() {
 	
 	dimMin = parseInt(document.getElementById("dim_min").value) || 0;
 	
-	if (worker != undefined)
-    	worker.postMessage({ "file": f, "dim": parseInt(dim.value), "threshold": parseFloatWithDefault(threshold.value, Infinity), "format": parseInt(format.value) });
+    worker.postMessage({ "file": f, "dim": parseInt(dim.value), "threshold": parseFloatWithDefault(threshold.value, Infinity), "format": parseInt(format.value) });
     
 }
 
@@ -140,32 +133,45 @@ function chop(x) {
 }
 
 function handleMessage(message) {
-    time.innerHTML = "Elapsed time: " + ((new Date()).getTime() - running_since)/1000.0 + " seconds" + ((message.data == undefined) ? "" : "&hellip;");
-    if (message.data == undefined) {
-        running_since = undefined;
-	} else if (message.data.type == "dim") {
-		log.innerHTML += "persistence intervals in dim " + message.data.dim + ":\n";
-		//document.getElementById("barcodes").innerHTML += "<p>persistence intervals in dim " + message.data.dim + ":</p>";
-		if (message.data.dim >= dimMin)
-		{
-			d3.select("#barcodes").append("p").text("Persistence intervals in dimension " + message.data.dim + ":\n");
-			initBarcode(range, message.data.dim);
+	if (message.data.type == "ready") {
+		worker_ready = true;
+		compute();
+	} else if (message.data.type == "abort") {
+		worker.terminate();
+		worker_ready = false;
+
+		log.textContent = "";
+		time.innerHTML = "";
+		barcodes.innerHTML = "";
+	} else {
+		time.innerHTML = "Elapsed time: " + ((new Date()).getTime() - running_since)/1000.0 + " seconds" + ((message.data.type == "finished") ? "" : "&hellip;");
+
+		if (message.data.type == "finished") {
+        	running_since = undefined;
+		} else if (message.data.type == "dim") {
+			log.innerHTML += "persistence intervals in dim " + message.data.dim + ":\n";
+			//document.getElementById("barcodes").innerHTML += "<p>persistence intervals in dim " + message.data.dim + ":</p>";
+			if (message.data.dim >= dimMin)
+			{
+				d3.select("#barcodes").append("p").text("Persistence intervals in dimension " + message.data.dim + ":\n");
+				initBarcode(range, message.data.dim);
+			}
+		} else if (message.data.type == "interval") {
+			if (message.data.dim >= dimMin) // && (message.data.death - message.data.birth > 0.005 * range[1]))
+			{
+				insertBar(message.data.birth, (message.data.death ? message.data.death : range[1]));
+			}
+			log.innerHTML += " [" + chop(message.data.birth) + "," +
+			(message.data.death ? chop(message.data.death) + ")\n" : (isNaN(parseFloat(threshold.value))? "&infin;)\n" : parseFloat(threshold.value) + "]\n"));
+		} else if (message.data.type == "point-cloud") {
+			log.innerHTML += "point cloud with " + message.data.size + " points in dimension " + message.data.dim + "\n";
+		} else if (message.data.type == "distance-matrix") {
+			log.innerHTML += "distance matrix with " + message.data.size + " points\n" +
+			"value range: [" + chop(message.data.min) + "," + chop(message.data.max) + "]\n";
+			range = [0, parseFloat(threshold.value)||message.data.max];
+		} else if (typeof message.data == "string") {
+			log.innerHTML += message.data;
 		}
-	} else if (message.data.type == "interval") {
-		if (message.data.dim >= dimMin) // && (message.data.death - message.data.birth > 0.005 * range[1]))
-		{
-			insertBar(message.data.birth, (message.data.death ? message.data.death : range[1]));
-		}
-		log.innerHTML += " [" + chop(message.data.birth) + "," +
-		(message.data.death ? chop(message.data.death) + ")\n" : (isNaN(parseFloat(threshold.value))? "&infin;)\n" : parseFloat(threshold.value) + "]\n"));
-	} else if (message.data.type == "point-cloud") {
-		log.innerHTML += "point cloud with " + message.data.size + " points in dimension " + message.data.dim + "\n";
-	} else if (message.data.type == "distance-matrix") {
-		log.innerHTML += "distance matrix with " + message.data.size + " points\n" +
-		"value range: [" + chop(message.data.min) + "," + chop(message.data.max) + "]\n";
-		range = [0, parseFloat(threshold.value)||message.data.max];
-	} else if (typeof message.data == "string") {
-		log.innerHTML += message.data;
     }
 }
 
